@@ -32,7 +32,7 @@ function tokenURI(uint _tokenId) public view override  returns (string memory){
 function getTokenURI(uint256 _id) public view returns (string memory){
     bytes memory dataURI = abi.encodePacked(
         '{',
-            '"name": "Polygon Heros', _id , '",',
+            '"name": "Polygon Heros', Strings.toString(_id) , '",',
             '"description": "NFTs for Polygon Heros",',
             '"image": "', createDynamicImage(msg.sender, _id), '"',
             
