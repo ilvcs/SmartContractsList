@@ -20,7 +20,7 @@ contract StakingWithMultipleTokenRewards is Ownable{
     IERC20 public immutable stakingToken;
     IERC20 public immutable rewardToken1;
     IERC20 public immutable rewardToken2;
-    uint public totalTokensStaked;
+    
 
     constructor(address _stakingToken, address _rewardToken1, address _rewardToken2){
         stakingToken = IERC20(_stakingToken);
@@ -33,7 +33,9 @@ contract StakingWithMultipleTokenRewards is Ownable{
         require(_amount > 0, "Ammount should be > 0");
         require(stakingToken.transferFrom(msg.sender, address(this), _amount) == true, "Token transfer failed" );
         userTotalStaking[msg.sender] += _amount;
-        userStakedForTokens[msg.sender][_rewardToken] += _amount;
+        uint userExistingTokensForRewardToken = userStakedForTokens[msg.sender][_rewardToken];
+        uint newStaking = userExistingTokensForRewardToken.add(_amount);
+        userStakedForTokens[msg.sender][_rewardToken] = newStaking;
         if(userRewardRate[msg.sender] == 0){
             //NOTE: just tempararly
             userRewardRate[msg.sender] = 2;
@@ -42,31 +44,38 @@ contract StakingWithMultipleTokenRewards is Ownable{
 
     }
 
-    function withdrawStakedTokens() public returns(uint){
+    function withdrawStakedTokens() public returns(bool){
         uint _userStakedBalance = userTotalStaking[msg.sender];
         require( _userStakedBalance > 0, "User has no stake");
-        require(stakingToken.transferFrom(address(this), msg.sender, _userStakedBalance) == true, "Token transfer faild" );
+        require(stakingToken.transfer(msg.sender, _userStakedBalance) == true, "Token transfer faild" );
         userTotalStaking[msg.sender] = 0;
+        uint256 userRewardForToken1 = userRewardsForTheToken(address(rewardToken1));
+        uint256 userRewardForToken2 = userRewardsForTheToken(address(rewardToken2));
         userStakedForTokens[msg.sender][address(rewardToken1)] = 0;
         userStakedForTokens[msg.sender][address(rewardToken2)] = 0;
         userWithdrawalTime[msg.sender] = block.timestamp;
-        return _userStakedBalance;
-    }
-
-    function withdrawRewards(address _rewardToken) public returns(bool){
-        uint _userRewards = userRewardsForTheToken(_rewardToken);
-        require(_userRewards  > 0, "No Rewards for the user");
-        require(IERC20(_rewardToken).transferFrom(address(this), msg.sender,_userRewards ), "Reward withdral faild");
-        rewardsPaidToTheUserPerToken[msg.sender][_rewardToken]+= _userRewards;
+        if(userRewardForToken1 > 0){
+            require(rewardToken1.approve(msg.sender, userRewardForToken1),"Reward token1 not approved");
+            require(rewardToken1.transferFrom(address(this), msg.sender,userRewardForToken1 ), "Reward withdral faild");
+            rewardsPaidToTheUserPerToken[msg.sender][address(rewardToken1)].add(userRewardForToken1) ;
+        }
+        if(userRewardForToken2 > 0){
+            require(rewardToken2.approve(msg.sender, userRewardForToken1),"Reward token2 not approved");
+            require(rewardToken2.transferFrom(address(this),msg.sender,userRewardForToken2 ), "Reward withdral faild");
+            rewardsPaidToTheUserPerToken[msg.sender][address(rewardToken2)].add(userRewardForToken2) ;
+        }
         return true;
     }
 
-    function updateUserRewards(address _user, address _rewardToken) public onlyOwner {
-        require(msg.sender != address(0));
-        require(_user != address(0));
-        require(userStakedForTokens[_user][_rewardToken] > 0, "User needs to stake tokens");
-        require(userTokenStakingTime[_user][_rewardToken] < block.timestamp, "User staking time is invalid");
-        userTokenStakingTime[_user][_rewardToken] -= 24 * 60 * 60;
+  
+    // This approach is just for testing, not legit approach for production
+    function updateUserRewards(address _user, address _rewardToken) public  onlyOwner {
+      require(msg.sender != address(0));
+      require(_user != address(0));
+      require(userStakedForTokens[_user][_rewardToken] > 0, "User needs to stake tokens");
+      require(userTokenStakingTime[_user][_rewardToken] < block.timestamp, "User staking time is invalid");
+      uint dayInSec = 24 * 60 * 60;
+      userTokenStakingTime[_user][_rewardToken].sub(dayInSec);
     }
 
     function userRewardsForTheToken(address _rewardToken) public view returns(uint){
